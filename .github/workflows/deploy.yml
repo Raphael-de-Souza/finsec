@@ -92,7 +92,7 @@ jobs:
 
       - run: terraform init
       - run: terraform validate
-      - run: terraform plan -var="image_tag=latest" -no-color
+      - run: terraform plan -var="image_tag=${{ needs.build.outputs.image_tag }}" -no-color
 
   # ── Terraform apply + ECS deploy (main) ──────────────────────────────────────
   deploy:
