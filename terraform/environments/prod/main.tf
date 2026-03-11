@@ -1,5 +1,5 @@
 ###############################################################################
-# prod environment — root module
+# prod environment root module
 ###############################################################################
 
 terraform {
@@ -13,12 +13,10 @@ terraform {
   }
 
   backend "s3" {
-    # Fill in before first apply:
-    # bucket         = "your-tfstate-bucket"
-    # key            = "prod/scores-api/terraform.tfstate"
-    # region         = "eu-west-1"
-    # dynamodb_table = "terraform-locks"
-    # encrypt        = true
+    bucket         = "terraform-state-154845614889"
+    key            = "prod/scores-api/terraform.tfstate"
+    region         = "eu-central-1"
+    encrypt        = true
   }
 }
 
@@ -42,7 +40,7 @@ locals {
 
 # ── Networking ────────────────────────────────────────────────────────────────
 module "vpc" {
-  source = "terraform/modules/vpc"
+  source = "../../modules/vpc"
 
   name = local.name
   cidr = var.vpc_cidr
@@ -51,10 +49,16 @@ module "vpc" {
 
 # ── Container registry ────────────────────────────────────────────────────────
 module "ecr" {
-  source = "terraform/modules/ecr"
+  source = "../../modules/ecr"
 
   name = local.name
   tags = local.tags
+}
+
+# ── DNS (Route 53) ────────────────────────────────────────────────────────────
+# Kept as a resource (not data source) to match the existing Terraform state.
+resource "aws_route53_zone" "this" {
+  name = var.route53_zone_name
 }
 
 # ── TLS certificate (must be in us-east-1 for ACM + ALB; same region is fine) ─
@@ -67,14 +71,32 @@ resource "aws_acm_certificate" "api" {
   }
 }
 
+# ── DNS validation records for ACM certificate ───────────────────────────────
+resource "aws_route53_record" "acm_validation" {
+  for_each = {
+    for dvo in aws_acm_certificate.api.domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      record = dvo.resource_record_value
+      type   = dvo.resource_record_type
+    }
+  }
+
+  allow_overwrite = true
+  name            = each.value.name
+  records         = [each.value.record]
+  ttl             = 60
+  type            = each.value.type
+  zone_id         = aws_route53_zone.this.zone_id
+}
+
 resource "aws_acm_certificate_validation" "api" {
   certificate_arn         = aws_acm_certificate.api.arn
-  validation_record_fqdns = [for r in aws_acm_certificate.api.domain_validation_options : r.resource_record_name]
+  validation_record_fqdns = [for record in aws_route53_record.acm_validation : record.fqdn]
 }
 
 # ── Load balancer ─────────────────────────────────────────────────────────────
 module "alb" {
-  source = "terraform/modules/alb"
+  source = "../../modules/alb"
 
   name              = local.name
   vpc_id            = module.vpc.vpc_id
@@ -85,7 +107,7 @@ module "alb" {
 
 # ── ECS Fargate service ───────────────────────────────────────────────────────
 module "ecs" {
-  source = "terraform/modules/ecs"
+  source = "../../modules/ecs"
 
   name                  = local.name
   vpc_id                = module.vpc.vpc_id
@@ -97,20 +119,16 @@ module "ecs" {
   task_cpu      = var.task_cpu
   task_memory   = var.task_memory
   desired_count = var.desired_count
-  min_capacity  = var.min_capacity
-  max_capacity  = var.max_capacity
 
   tags = local.tags
+
+  # Ensure ALB listeners are fully created before ECS service registers with target group
+  depends_on = [module.alb]
 }
 
-# ── DNS (Route 53) ────────────────────────────────────────────────────────────
-data "aws_route53_zone" "this" {
-  name         = var.route53_zone_name
-  private_zone = false
-}
-
+# ── DNS alias record (API → ALB) ─────────────────────────────────────────────
 resource "aws_route53_record" "api" {
-  zone_id = data.aws_route53_zone.this.zone_id
+  zone_id = aws_route53_zone.this.zone_id
   name    = var.api_domain
   type    = "A"
 

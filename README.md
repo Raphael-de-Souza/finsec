@@ -1,4 +1,4 @@
-# Scores API — Senior Platform Engineer Challenge
+# Scores API
 
 Public REST API for financial security scores, deployed on AWS with ECS Fargate + Terraform.
 
@@ -67,7 +67,7 @@ Supporting services:
 
 | Decision | Rationale |
 |---|---|
-| Standard library only (`net/http`) | Go 1.22 added `{path_param}` routing — no need for chi/gin |
+| Standard library only (`net/http`) | Go 1.26 added `{path_param}` |
 | `log/slog` (structured JSON logs) | Native since Go 1.21, CloudWatch-friendly |
 | Multi-stage Docker build → `scratch` | Final image < 10 MB, zero attack surface |
 | Graceful shutdown (30 s) | ECS sends `SIGTERM` before forceful stop |
@@ -143,12 +143,39 @@ Push to main      → go test → docker build+push (SHA tag) → terraform appl
 Create an S3 bucket and DynamoDB table, then fill in `backend {}` in `environments/prod/main.tf`:
 
 ```bash
-aws s3 mb s3://your-tfstate-bucket --region eu-west-1
-aws dynamodb create-table \
-  --table-name terraform-locks \
-  --attribute-definitions AttributeName=LockID,AttributeType=S \
-  --key-schema AttributeName=LockID,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST
+aws s3api create-bucket \
+    --bucket terraform-state-154845614889 \
+    --region eu-central-1 \
+    --create-bucket-configuration LocationConstraint=eu-central-1
+aws s3api put-bucket-encryption \
+    --bucket terraform-state-154845614889 \
+    --server-side-encryption-configuration '{
+        "Rules": [
+            {
+                "ApplyServerSideEncryptionByDefault": {
+                    "SSEAlgorithm": "AES256"
+                }
+            }
+        ]
+    }'
+aws s3api put-bucket-versioning \
+    --bucket terraform-state-154845614889 \
+    --versioning-configuration Status=Enabled
+aws s3api put-bucket-lifecycle-configuration \
+    --bucket terraform-state-154845614889 \
+    --lifecycle-configuration '{
+        "Rules": [
+            {
+                "ID": "ManterUltimas5Versoes",
+                "Status": "Enabled",
+                "Filter": {"Prefix": ""},
+                "NoncurrentVersionExpiration": {
+                    "NoncurrentDays": 1,
+                    "NewerNoncurrentVersions": 5
+                }
+            }
+        ]
+    }'
 ```
 
 ### 2. Deploy infrastructure
@@ -157,12 +184,19 @@ aws dynamodb create-table \
 cd terraform/environments/prod
 
 terraform init
-terraform apply \
-  -var="api_domain=api.scores.example.com" \
-  -var="route53_zone_name=scores.example.com"
+terraform apply
 ```
 
-### 3. Build and push first image
+### 3. Build app
+
+```bash
+cd app
+go mod init github.com/finsec/scores-api
+go mod tidy
+```
+
+
+### 4. Build and push first image
 
 ```bash
 cd app
@@ -171,10 +205,11 @@ docker build -t <ECR_URL>:latest .
 docker push <ECR_URL>:latest
 ```
 
-### 4. Validate
+### 5. Validate
 
 ```bash
-curl https://api.scores.example.com/securities
-curl https://api.scores.example.com/securities/AAPL/scores
-curl https://api.scores.example.com/securities/INVALID/scores  # → 404
+curl https://api.adenir.com/securities
+curl https://api.adenir.com/securities/AAPL/scores
+curl https://api.adenir.com/securities/{security_id}/scores
+curl https://api.adenir.com/securities/INVALID/scores  # → 404
 ```

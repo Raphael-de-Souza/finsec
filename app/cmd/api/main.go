@@ -10,8 +10,8 @@ import (
 	"syscall"	//Signals definitions SIGTERM (syscall.SIGTERM). SIGINT (Ctrl+C) (syscall.SIGINT or os.Interrupt)
 	"time"
 
-	"github.com/your-org/scores-api/internal/handler"
-	"github.com/your-org/scores-api/internal/middleware"
+	"github.com/finsec/scores-api/internal/handler"
+	"github.com/finsec/scores-api/internal/middleware"
 )
 
 func main() {

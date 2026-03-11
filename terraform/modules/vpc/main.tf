@@ -1,5 +1,5 @@
 ###############################################################################
-# VPC — two public + two private subnets across two AZs
+# VPC two public + two private subnets across two AZs
 ###############################################################################
 
 resource "aws_vpc" "this" {

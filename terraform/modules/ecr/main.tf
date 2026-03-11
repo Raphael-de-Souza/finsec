@@ -1,5 +1,5 @@
 ###############################################################################
-# ECR — private container registry with image scanning & lifecycle policy
+# ECR private container registry with image scanning & lifecycle policy
 ###############################################################################
 
 resource "aws_ecr_repository" "this" {

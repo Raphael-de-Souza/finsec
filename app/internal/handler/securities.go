@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/your-org/scores-api/internal/model"
+	"github.com/finsec/scores-api/internal/model"
 )
 
-// seed data — replace with DB/cache calls in production.
+// Mocked data
 var securities = []model.Security{
 	{ID: "AAPL", Name: "Apple Inc."},
 	{ID: "MSFT", Name: "Microsoft Corporation"},
@@ -21,7 +21,7 @@ var scores = map[string]float64{
 	"AAPL":  92.4,
 	"MSFT":  89.7,
 	"GOOGL": 87.1,
-	"AMZN":  83.5,
+	"AMZN":  84.5,
 	"NVDA":  96.2,
 }
 

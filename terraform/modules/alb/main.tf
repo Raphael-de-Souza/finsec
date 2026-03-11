@@ -1,5 +1,5 @@
 ###############################################################################
-# ALB — public HTTPS load balancer + security group
+# ALB public HTTPS load balancer + security group
 ###############################################################################
 
 resource "aws_security_group" "alb" {
