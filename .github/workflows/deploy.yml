@@ -92,7 +92,7 @@ jobs:
 
       - run: terraform init
       - run: terraform validate
-      - run: terraform plan -var="image_tag=${{ needs.build.outputs.image_tag }}" -no-color
+      - run: terraform plan -var="image_tag=latest" -no-color
 
   # ── Terraform apply + ECS deploy (main) ──────────────────────────────────────
   deploy:
@@ -117,3 +117,20 @@ jobs:
 
       - run: terraform init
       - run: terraform apply -auto-approve -var="image_tag=${{ needs.build.outputs.image_tag }}"
+
+      # Force ECS to pick up the new task definition created by terraform apply.
+      # This is needed because the ECS service has ignore_changes = [task_definition]
+      # so Terraform creates the new revision but does not update the running service.
+      - name: Deploy new task definition to ECS
+        working-directory: .
+        run: |
+          TASK_DEF=$(aws ecs describe-task-definition \
+            --task-definition scores-api-prod \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+          aws ecs update-service \
+            --cluster scores-api-prod \
+            --service scores-api-prod \
+            --task-definition "$TASK_DEF" \
+            --force-new-deployment
+          echo "Deployed task definition: $TASK_DEF"
