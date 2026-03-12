@@ -21,7 +21,7 @@ var scores = map[string]float64{
 	"AAPL":  92.4,
 	"MSFT":  89.7,
 	"GOOGL": 87.1,
-	"AMZN":  84.5,
+	"AMZN":  83.5,
 	"NVDA":  96.2,
 }
 
